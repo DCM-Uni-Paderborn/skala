@@ -11,38 +11,38 @@ Skala is a neural network-based exchange-correlation (XC) functional for density
 
 | Path | Description |
 |------|-------------|
-| `src/skala/` | Core Python package (model, PySCF/ASE integrations, utilities) |
-| `tests/` | Pytest test suite |
-| `docs/` | Sphinx documentation (RST + Jupyter notebooks via myst-nb) |
-| `examples/` | Usage examples (Python scripts and C++ integrations) |
-| `third_party/gauxc/` | Vendored GauXC library with Skala support |
+| `skala/` | Published ASE, PySCF, and GPU4PySCF runtime plus tests |
+| `model/` | Trainable model definition, tests, and LibTorch/FTorch examples |
+| `gauxc/` | GauXC exporter, native examples, tests, and documentation |
+| `benchmark/` | Benchmark runner, reference data, report tooling, and tests |
+| `website/` | Main Sphinx site |
 | `.github/workflows/` | CI workflows (test, docs) |
 
 ## Development environment
 
-1. **Python version**: ≥3.10 (target 3.11 for tooling).
-2. **Environment setup** (conda recommended):
+1. **Python version**: 3.11–3.13 (target 3.11 for compatibility tooling).
+2. **Environment setup** (Pixi 0.82.1):
    ```bash
-   mamba env create -f environment.yml
-   mamba activate skala
-   pip install -e .
+  pixi install --locked -e dev
    ```
 3. **Pre-commit hooks** (required before committing):
    ```bash
-   pre-commit install
-   pre-commit run --all-files
+  pixi run -e dev pre-commit install
+  pixi run -e dev pre-commit run --all-files
    ```
 
 ## Code style & linting
 
 - **Formatter/linter**: Ruff (`ruff format`, `ruff check --fix --select I`).
-- **Type checking**: mypy with `--ignore-missing-imports`.
+- **Type checking**: Pyrefly in strict mode. Ignore missing type information only for explicitly
+  named untyped dependencies in `pyrefly.toml`; do not use global missing-import suppression.
 - Line length: 100 characters (Black-compatible).
 - Imports sorted via Ruff's isort rules.
-- Exclude `third_party/` and `tests/` from mypy; exclude `third_party/` from Ruff.
+- Generated build, coverage, and documentation output is excluded from static analysis.
 
 When editing code:
-- Run `ruff format <file>` and `ruff check --fix <file>` before committing.
+- Run `pre-commit run ruff-format --files <file>` and
+  `pre-commit run ruff --files <file>` before committing.
 - Add type hints to new public functions and classes.
 - Use Google-style docstrings with `Args:`, `Returns:`, `Raises:` sections.
 
@@ -51,20 +51,23 @@ When editing code:
 - Framework: pytest with pytest-cov.
 - Run tests:
   ```bash
-  pytest tests/ -v --cov=skala
+  OMP_NUM_THREADS=4 pixi run -e dev pytest -v --doctest-modules \
+    --cov=skala --cov-report=xml --cov-report=term-missing --cov-report=html \
+    --durations=50 --durations-min=1.0 skala/src/skala/ skala/tests/
   ```
-- Keep test files in `tests/` with `test_` prefix.
+- Keep tests beside their owning component with a `test_` prefix.
 - Use fixtures for expensive setup (molecule construction, model loading).
 - Prefer fast unit tests; integration tests that run DFT should be marked or placed separately.
 
 ## Documentation
 
 - Engine: Sphinx with myst-nb (executes notebooks during build).
-- Build locally:
+- Build locally (main site plus GauXC guide into `website/_build/html`):
   ```bash
-  sphinx-build -b html docs docs/_build/html
+  pixi run docs
   ```
-- Notebooks in `docs/` should be executable with a 5-minute timeout.
+- Check external links with `pixi run docs-linkcheck`.
+- Notebooks in `website/` should be executable with a 5-minute timeout.
 - Use reStructuredText for standalone pages; Jupyter notebooks for tutorials.
 
 ## Pull request guidelines
@@ -78,24 +81,26 @@ When editing code:
 
 ## Architecture notes
 
-- **Functional implementation** (`src/skala/functional/`): Defines the Skala model layers, density
-  features, and enhancement-factor network. The pre-trained weights are loaded via Hugging Face Hub.
-- **PySCF integration** (`src/skala/pyscf/`): Custom `numint` module and `SkalaKS` class hook the
+- **Runtime functional API** (`skala/src/skala/functional/`): Loads traced checkpoints and defines
+  traditional functionals and the runtime interface.
+- **Model definition** (`model/src/skala_model/`): Defines trainable layers and the
+  enhancement-factor network; it is not part of release artifacts.
+- **PySCF integration** (`skala/src/skala/pyscf/`): Custom `numint` module and `SkalaKS` class hook the
   model into PySCF's DFT machinery.
-- **ASE calculator** (`src/skala/ase/`): Provides an ASE-compatible calculator for energy/force
+- **ASE calculator** (`skala/src/skala/ase/`): Provides an ASE-compatible calculator for energy/force
   evaluations and geometry optimizations.
-- **GauXC add-on** (`third_party/gauxc/`): C++ library enabling Skala in compiled DFT codes; uses
-  LibTorch for inference.
+- **GauXC integration** (`gauxc/`): Exporter and C/C++/Fortran examples for external GauXC builds.
 
-## Common tasks
+## Common commands
 
 | Task | Command |
 |------|---------|
-| Format code | `ruff format src/ tests/` |
-| Lint code | `ruff check --fix src/ tests/` |
-| Run tests | `pytest tests/ -v` |
-| Build docs | `sphinx-build -b html docs docs/_build/html` |
-| Type check | `mypy src/skala` |
+| Format code | `pixi run -e dev pre-commit run ruff-format --all-files` |
+| Lint code | `pixi run -e dev pre-commit run --all-files` |
+| Run runtime tests | `OMP_NUM_THREADS=4 pixi run -e dev pytest -v --doctest-modules --cov=skala --cov-report=xml --cov-report=term-missing --cov-report=html --durations=50 --durations-min=1.0 skala/src/skala/ skala/tests/` |
+| Run component tests | `OMP_NUM_THREADS=4 pixi run -e dev pytest -v model/tests/test_model.py model/tests/test_utils.py gauxc/tests/ benchmark/tests/` |
+| Build docs | `pixi run docs` |
+| Type check | `pixi run -e dev pyrefly check` |
 
 ## Contact
 

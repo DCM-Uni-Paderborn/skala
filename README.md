@@ -1,7 +1,7 @@
 # Skala: Accurate and scalable exchange-correlation with deep learning
 
 [![Documentation](https://img.shields.io/badge/docs-microsoft.github.io%2Fskala-blue?logo=read-the-docs&logoColor=white)](https://microsoft.github.io/skala)
-[![Tests](https://img.shields.io/github/actions/workflow/status/microsoft/skala/test.yml?branch=main&logo=github&label=build)](https://github.com/microsoft/skala/actions/workflows/test.yml)
+[![Tests](https://img.shields.io/github/actions/workflow/status/microsoft/skala/skala-test.yml?branch=main&logo=github&label=build)](https://github.com/microsoft/skala/actions/workflows/skala-test.yml)
 [![PyPI](https://img.shields.io/pypi/v/skala?logo=pypi&logoColor=white)](https://pypi.org/project/skala/)
 [![Paper](https://img.shields.io/badge/arXiv-2506.14665-b31b1b?logo=arxiv&logoColor=white)](https://arxiv.org/abs/2506.14665)
 
@@ -15,31 +15,37 @@ Learn more about Skala in our [ArXiv paper](https://arxiv.org/abs/2506.14665).
 
 ## What's in here
 
-This repository contains two main components:
+This repository contains five components:
 
-1. The Python package `skala`, distributed [on PyPI](https://pypi.org/project/skala/) and on conda-forge. It contains a PyTorch implementation of the Skala model and its bindings to the quantum-chemistry packages [PySCF](https://pyscf.org/), [GPU4PySCF](https://pyscf.org/user/gpu.html), and [ASE](https://ase-lib.org/).
-2. Examples of using Skala from compiled code through LibTorch and GauXC:
-   - [Skala in C++ with libtorch](examples/cpp/cpp_integration)
+1. [`skala/`](skala) is the only published Python package. It contains the runtime needed to load released checkpoints and use Skala through [PySCF](https://pyscf.org/), [GPU4PySCF](https://pyscf.org/user/gpu.html), and [ASE](https://ase-lib.org/).
+2. [`model/`](model) contains the trainable model definition, its tests, and compiled-model examples. This development code is not included in the `skala` wheel or source distribution.
+3. [`gauxc/`](gauxc) contains the GauXC exporter, native integration examples, tests, and source documentation.
+4. [`benchmark/`](benchmark) contains the benchmark runner, reference data, report tooling, and tests.
+5. [`website/`](website) contains the main Sphinx site.
+
+Compiled-code examples include:
+   - [Skala in C++ with libtorch](https://microsoft.github.io/skala/cpp)
    - [Skala in Fortran with FTorch](https://microsoft.github.io/skala/ftorch)
    - [Skala in C++ with GauXC](https://microsoft.github.io/skala/gauxc/cpp-library)
    - [Skala in C with GauXC](https://microsoft.github.io/skala/gauxc/c-library)
    - [Skala in Fortran with GauXC](https://microsoft.github.io/skala/gauxc/fortran-library)
 
-
-### Skala in Azure AI Foundry
-
-The Skala model is also served on [Azure AI Foundry](https://ai.azure.com/catalog/models/Skala).
+Development-only imports use separate namespaces: `skala_model`, `skala_gauxc`, and
+`skala_benchmark`. They are intentionally not compatibility aliases inside the released `skala`
+package.
 
 ### GauXC development version for PyTorch-based functionals like Skala
 
 [GauXC](https://github.com/wavefunction91/GauXC) is a CPU/GPU C++ library for XC functionals.
 A development version with an add-on supporting PyTorch-based functionals like Skala is available in the [`skala` branch of the GauXC repository](https://github.com/wavefunction91/GauXC/tree/skala).
-GauXC is part of the stack that serves Skala in [Azure AI Foundry](https://ai.azure.com/catalog/models/Skala) and can be used to integrate Skala into other third-party DFT codes.
+GauXC can be used to integrate Skala into other third-party DFT codes.
 For detailed documentation on using GauXC visit the [Skala integration guide](https://microsoft.github.io/skala/gauxc).
 
 ## Getting started: PySCF (CPU)
 
 All information below relates to the Python package `skala`.
+Skala supports Linux and macOS on Apple Silicon with Python 3.11 through 3.13, the latest
+PySCF release (2.14), and the two latest PyTorch release lines (2.12 and 2.13).
 
 `pip install skala` works out of the box and pulls every dependency from PyPI.
 If you don't already have PyTorch installed, install the CPU-only wheel first
@@ -50,14 +56,12 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install skala
 ```
 
-For a reproducible conda environment, use the provided
-[`environment-cpu.yml`](environment-cpu.yml), which pins CPU-only PyTorch and
-all runtime dependencies:
+For a reproducible source environment, use the default environment from the
+committed Pixi lockfile. It uses Python 3.12, PySCF 2.14, and CPU-only PyTorch 2.13:
 
 ```bash
-mamba env create -n skala -f environment-cpu.yml
-mamba activate skala
-pip install skala
+pixi install --locked -e default
+pixi run -e default python your_script.py
 ```
 
 Run an SCF calculation with Skala for a hydrogen molecule:
@@ -77,7 +81,8 @@ ks.kernel()
 ## Getting started: GPU4PySCF (GPU)
 
 The GPU install is more involved because `gpu4pyscf` ships CUDA-version-specific
-wheels that must match your CUDA toolkit.
+wheels that must match your CUDA toolkit. GPU environments and helper packages
+use the latest tested GPU4PySCF release, 1.9.0.
 
 To install all dependencies from PyPI, use the GPU specific package with the
 matching CUDA version, e.g., for CUDA 12:
@@ -86,27 +91,25 @@ matching CUDA version, e.g., for CUDA 12:
 pip install skala-cuda12x
 ```
 
-The `skala-cuda11x` and `skala-cuda13x` packages are also available for CUDA 11 and 13, respectively.
+The `skala-cuda13x` package is available for CUDA 13.
 
-The recommended path is the provided [`environment-gpu.yml`](environment-gpu.yml),
-which pins `pytorch-gpu`, `cuda-toolkit` 12, `cutensor`, and installs `gpu4pyscf-cuda12x` from PyPI:
+For a reproducible source environment, choose one of the locked GPU environments:
 
-```bash
-mamba env create -n skala -f environment-gpu.yml
-mamba activate skala
-pip install skala
-```
+| Environment | CUDA | PyTorch |
+|---|---:|---:|
+| `gpu-cuda12-torch212` | 12 | 2.12 |
+| `gpu-cuda12-torch213` | 12 | 2.13 |
+| `gpu-cuda13-torch213` | 13 | 2.13 |
 
-If you are building inside a container without a GPU attached (e.g., CI or a
-Docker image built on a CPU-only host), set `CONDA_OVERRIDE_CUDA` so the solver
-proceeds without a device:
+For example:
 
 ```bash
-CONDA_OVERRIDE_CUDA=12.0 mamba env create -n skala -f environment-gpu.yml
+pixi install --locked -e gpu-cuda12-torch213
+pixi run -e gpu-cuda12-torch213 python your_script.py
 ```
 
-For CUDA 11 or 13, adjust `cuda-toolkit`, `cuda-version`, and the
-`gpu4pyscf-cuda{11,13}x` pin in `environment-gpu.yml` accordingly. Check your
+The workspace records CUDA 12 and CUDA 13 as explicit platforms, so the lock can
+be installed while building a container without an attached GPU. Check your
 driver's maximum supported CUDA version with `nvidia-smi`.
 
 Run an SCF calculation with Skala for a hydrogen molecule on GPU:
@@ -165,7 +168,7 @@ opt.run(fmax=0.01)
 
 ## Documentation and examples
 
-See [microsoft.github.io/skala](https://microsoft.github.io/skala) for a more detailed installation guide and further examples of how to use the Skala functional with PySCF, GPU4PySCF, and ASE, as well as in [Azure AI Foundry](https://ai.azure.com/catalog/models/Skala).
+See [microsoft.github.io/skala](https://microsoft.github.io/skala) for a more detailed installation guide and further examples of how to use the Skala functional with PySCF, GPU4PySCF and ASE.
 
 ## Security: loading `.fun` files
 

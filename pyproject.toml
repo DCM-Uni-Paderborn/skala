@@ -1,77 +1,14 @@
-[build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "skala"
-version = "2026.8"
-description = "Skala Exchange Correlation Functional"
-authors = []
-license-files = ["LICENSE.txt"]
-readme = "README.md"
-keywords = []
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "Development Status :: 5 - Production/Stable",
-]
-requires-python = ">=3.10"
-dependencies = [
-    "ase",
-    "azure-core",
-    "azure-identity",
-    "dftd3",
-    "e3nn",
-    "huggingface_hub",
-    "numpy",
-    "opt_einsum_fx",
-    "pyscf>=2.8,<2.14",
-    "qcelemental",
-    "torch"
-]
-
-optional-dependencies.dev = [
-    "pre-commit",
-    "mypy>=2",
-    "pytest",
-    "pytest-cov",
-    "pytest-randomly",
-]
-optional-dependencies.doc = [
-    "ipywidgets",
-    "myst-nb",
-    "sphinx",
-    "sphinx-book-theme",
-    "sphinx-design",
-    "sphinxcontrib-bibtex",
-    "sphinxcontrib-moderncmakedomain",
-    "sphinx-fortran",
-]
-
-urls.repository = "https://github.com/microsoft/skala"
-urls.documentation = "https://microsoft.github.io/skala"
-urls.homepage = "https://aka.ms/dft"
-
-[tool.mypy]
-strict = true
-ignore_missing_imports = true
-no_namespace_packages = true
-python_version = "3.12"
-exclude = ["third_party/"]
-disable_error_code = ["no-any-return"]
-
-# torch.autograd.Function uses dynamic attributes on FunctionCtx (ctx.save_for_backward pattern)
-# and Function.apply() is untyped. These are fundamental to PyTorch's autograd API.
-[[tool.mypy.overrides]]
-module = "skala.pyscf.features"
-disable_error_code = ["no-any-return", "attr-defined", "no-untyped-call"]
-
 [tool.ruff]
 target-version = "py311"
-src = ["src"]
-exclude = ["third_party"]
+src = ["skala/", "model/", "gauxc/", "benchmark/", "website/"]
+exclude = ["build", "website/_build", "third_party"]
 
 [tool.ruff.lint]
-extend-select = [
+select = [
+  "E4", # pycodestyle import errors
+  "E7", # pycodestyle statement errors
+  "E9", # pycodestyle runtime errors
+  "F", # Pyflakes
   "B", # flake8-bugbear
   "D417", # undocumented-param in docstring
   "I", # isort
@@ -82,11 +19,6 @@ extend-ignore = [
   "E741", # variable name l
 ]
 
-[tool.ruff.lint.per-file-ignores]
-# E402: imports must come after CUDA checks and CuPy allocator configuration
-"src/skala/gpu4pyscf/__init__.py" = ["E402"]
-"src/skala/gpu4pyscf/dft.py" = ["E402"]
-
 [tool.ruff.lint.isort]
 detect-same-package = true
 
@@ -94,24 +26,25 @@ detect-same-package = true
 line-length = 100
 
 [tool.pytest.ini_options]
+timeout = 300
+addopts = "-m 'not profiling and not benchmark and not model_benchmark'"
+pythonpath = [".", "skala/src", "gauxc/src"]
+testpaths = ["tests", "skala/tests", "model/tests", "gauxc/tests", "benchmark/tests"]
+markers = [
+    "benchmark: performance measurements collected by pytest-benchmark",
+    "gpu: requires a CUDA-capable GPU and GPU test dependencies",
+    "model_benchmark: traced-model forward/backward accuracy, runtime, and memory gates",
+    "profiling: single-call performance workloads intended for profilers",
+]
 filterwarnings = [
     "error",
-    # PyTorch 2.11 deprecated `torch.jit.load`; Skala's pretrained checkpoints
+    # Supported PyTorch versions deprecate `torch.jit.load`; Skala's pretrained checkpoints
     # are TorchScript archives, so `skala.functional.load` still uses it.
     'ignore:`torch\.jit\.load` is deprecated\. Please switch to `torch\.export`\.:DeprecationWarning',
     'ignore:`torch\.jit\.script` is deprecated\. Please switch to `torch\.compile` or `torch\.export`\.:DeprecationWarning',
     'ignore:`torch\.jit\.save` is deprecated\. Please switch to `torch\.export`\.:DeprecationWarning',
     'ignore:`torch\.jit\.save` is not supported in Python 3\.14+ and may break\. Please switch to `torch\.export`\.:DeprecationWarning',
-    # PySCF's `SCF.__init__` (pyscf/scf/hf.py, currently line 1733) creates
-    # `self._chkfile = tempfile.NamedTemporaryFile(...)` as its checkpoint file
-    # and relies on finalization to close it, which emits ResourceWarning during
-    # GC. The warning is emitted by CPython's I/O layer (not from the pyscf
-    # module), so we match on the message. Traced via PYTHONTRACEMALLOC.
-    "ignore:unclosed file <_io\\.FileIO name='/tmp/tmp.*' mode='rb\\+' closefd=True>:ResourceWarning",
-    # On recent pytest versions the same leaked tempfile surfaces during GC at
-    # session teardown via the unraisable-exception hook, which re-emits it as
-    # `pytest.PytestUnraisableExceptionWarning`. Filter that wrapper too.
-    "ignore:Exception ignored in. <_io\\.FileIO name='/tmp/tmp.*' mode='rb\\+' closefd=True>:pytest.PytestUnraisableExceptionWarning",
+    'ignore:`torch\.jit\.trace_method` is deprecated\. Please switch to `torch\.compile` or `torch\.export`\.:DeprecationWarning',
     # From gpu4pyscf if cutensor is not available
     'ignore:using cupy as the tensor contraction engine\.:UserWarning',
     # Deprecation warning in huggingface_hub package

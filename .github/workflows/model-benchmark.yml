@@ -1,0 +1,74 @@
+name: Model benchmarks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/model-benchmark.yml'
+      - '.github/actions/setup-pixi/**'
+      - 'conftest.py'
+      - 'pixi.lock'
+      - 'pixi.toml'
+      - 'pyproject.toml'
+      - 'model/**'
+      - 'skala/src/skala/__init__.py'
+      - 'skala/src/skala/features.py'
+      - 'skala/src/skala/functional/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cpu:
+    name: CPU model benchmark
+    if: github.ref == 'refs/heads/main'
+    runs-on: microsoft-skala-cpu-pool
+    env:
+      OMP_NUM_THREADS: 4
+      MKL_NUM_THREADS: 4
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Print CPU diagnostics
+      uses: ./.github/actions/cpu-diagnostics
+
+    - name: Setup Pixi
+      uses: ./.github/actions/setup-pixi
+      with:
+        environment: default
+        pixi-bin-path: ${{ runner.temp }}/bin/pixi
+        post-cleanup: true
+
+    - name: Run CPU model benchmarks
+      run: >-
+        pytest -v -m model_benchmark -k cpu
+        model/tests/test_traced_model_comparison.py
+
+  gpu:
+    name: GPU model benchmark
+    if: github.ref == 'refs/heads/main'
+    runs-on: microsoft-skala-small-gpu-pool
+    env:
+      OMP_NUM_THREADS: 4
+      MKL_NUM_THREADS: 4
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Print CPU diagnostics
+      uses: ./.github/actions/cpu-diagnostics
+
+    - name: Setup Pixi
+      uses: ./.github/actions/setup-pixi
+      with:
+        environment: gpu-cuda12-torch213
+        pixi-bin-path: ${{ runner.temp }}/bin/pixi
+        post-cleanup: true
+
+    - name: Verify CUDA is available
+      run: python tools/verify_gpu.py
+
+    - name: Run GPU model benchmarks
+      run: >-
+        pytest -v -m model_benchmark -k cuda
+        model/tests/test_traced_model_comparison.py

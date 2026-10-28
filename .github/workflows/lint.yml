@@ -1,0 +1,25 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Setup Pixi
+      uses: ./.github/actions/setup-pixi
+      with:
+        environment: default
+
+    - name: Run pre-commit hooks
+      run: pre-commit run --all-files

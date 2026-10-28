@@ -1,0 +1,39 @@
+name: Model tests
+
+on:
+  push:
+    branches: [main]
+    paths: &model-test-paths
+      - '.github/workflows/model-test.yml'
+      - '.github/actions/setup-pixi/**'
+      - 'model/**'
+      - 'pixi.lock'
+      - 'pixi.toml'
+      - 'pyproject.toml'
+      - 'skala/src/**'
+  pull_request:
+    branches: [main]
+    paths: *model-test-paths
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      OMP_NUM_THREADS: 4
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Print CPU diagnostics
+      uses: ./.github/actions/cpu-diagnostics
+
+    - name: Setup Pixi
+      uses: ./.github/actions/setup-pixi
+      with:
+        environment: default
+
+    - name: Run model unit tests
+      run: pytest -v model/tests/test_model.py model/tests/test_utils.py

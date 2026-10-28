@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: MIT
+
+"""
+SHA-256 hash digests for known traced functional files.
+
+These hashes are used to verify file integrity before loading with
+``torch.jit.load``, which deserializes arbitrary code and is therefore
+security-sensitive.
+"""
+
+# Maps repo_id -> immutable Hugging Face commit revision.
+KNOWN_REVISIONS: dict[str, str] = {
+    "microsoft/skala-1.0": "6a002991259cf046831ed379f75a837ffd1eef82",
+    "microsoft/skala-1.1": "99b5ed87e5f69d9216e1f9e30148b922eaea1241",
+    "microsoft/skala-baselines": "0a0af12a5bbb2e149868215e0003f7f953f776f8",
+}
+
+# Maps (repo_id, filename) -> expected SHA-256 hex digest.
+KNOWN_HASHES: dict[tuple[str, str], str] = {
+    ("microsoft/skala-1.0", "skala-1.0.fun"): (
+        "08d94436995937eb57c451af7c92e2c7f9e1bff6b7da029a3887e9f9dd4581c0"
+    ),
+    ("microsoft/skala-1.0", "skala-1.0-cuda.fun"): (
+        "0b38e13237cec771fed331664aace42f8c0db8f15caca6a5c563085e61e2b1fd"
+    ),
+    ("microsoft/skala-1.1", "skala-1.1.fun"): (
+        "0c8432ac3f03c8f1276372df9aca5b7ee7f8939d47a8789eb158976e89aa0606"
+    ),
+    (
+        "microsoft/skala-1.1",
+        "skala-1.1-cuda.fun",
+    ): "f77be6002d873c0a2384b6df7850d32bbec519036344ff5fdde9730c6f9a4326",
+    (
+        "microsoft/skala-1.1",
+        "skala-1.1-rev1.fun",
+    ): "7f3e8622e1eb520ccd88a55464c3e359ac4d7e5ccbd1fb77a26afa1e1c20a5cd",
+    (
+        "microsoft/skala-1.1",
+        "skala-1.1-rev1-cuda.fun",
+    ): "f848eae769dca91741a518ae7275d10caac398ab21db649f91bc1f136872f223",
+    (
+        "microsoft/skala-baselines",
+        "ldax.fun",
+    ): "dd30928579ac970ffccc0c6f4ff6e2f7d7eeda3665352229a3f2678b3d0cb32e",
+}

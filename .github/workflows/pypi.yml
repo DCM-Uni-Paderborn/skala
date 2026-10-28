@@ -12,64 +12,55 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [skala, microsoft-skala]
-        cuda: ['']
-        include:
-          - package: skala-cuda
-            cuda: 11x
-          - package: skala-cuda
-            cuda: 12x
-          - package: skala-cuda
-            cuda: 13x
+        package: [skala, microsoft-skala, skala-cuda12x, skala-cuda13x]
 
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       with:
         persist-credentials: false
 
-    - name: Set up Python
-      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+    - name: Print CPU diagnostics
+      uses: ./.github/actions/cpu-diagnostics
+
+    - name: Setup Pixi
+      uses: ./.github/actions/setup-pixi
       with:
-        python-version: "3.11"
-
-    - name: Install pypa/build
-      run: >-
-        python3 -m
-        pip install
-        build
-        --user
-
-    - name: Replace pyproject.toml
-      if: ${{ matrix.package == 'microsoft-skala' }}
-      run: |
-        VERSION=$(python3 -c "from tomllib import load; print(load(open('pyproject.toml', 'rb'))['project']['version'])")
-        rm -r src/skala
-        mkdir -p src/microsoft_skala
-        echo "from skala import *" > src/microsoft_skala/__init__.py
-        touch src/microsoft_skala/py.typed
-        sed -e "s/@VERSION@/$VERSION/g" .github/workflows/pypi/microsoft-skala.toml > pyproject.toml
-        cat pyproject.toml
-
-    - name: Replace pyproject.toml
-      if: ${{ matrix.package == 'skala-cuda' }}
-      run: |
-        VERSION=$(python3 -c "from tomllib import load; print(load(open('pyproject.toml', 'rb'))['project']['version'])")
-        CUDA=${{ matrix.cuda }}
-        rm -r src/skala
-        mkdir -p src/skala_cuda
-        echo "from skala import *" > src/skala_cuda/__init__.py
-        touch src/skala_cuda/py.typed
-        sed -e "s/@VERSION@/$VERSION/g" -e "s/@CUDA@/$CUDA/g" .github/workflows/pypi/skala-cuda.toml > pyproject.toml
-        cat pyproject.toml
+        environment: release
 
     - name: Build a binary wheel and a source tarball
-      run: python3 -m build
+      run: python tools/build_release.py ${{ matrix.package }}
 
     - name: Store the distribution packages
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
-        name: ${{ matrix.package }}${{ matrix.cuda }}-pkg
+        name: ${{ matrix.package }}-pkg
         path: dist/
+
+  build-conda:
+    name: Build unpublished conda artifact
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        persist-credentials: false
+
+    - name: Print CPU diagnostics
+      uses: ./.github/actions/cpu-diagnostics
+
+    - name: Setup Pixi
+      uses: ./.github/actions/setup-pixi
+      with:
+        environment: release
+
+    - name: Build conda artifact
+      run: pixi publish --path skala --target-dir dist-conda
+
+    - name: Store conda artifact
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: skala-conda-pkg
+        path: dist-conda/*.conda
+        if-no-files-found: error
 
   publish-to-pypi:
     name: Publish to PyPI
@@ -80,18 +71,26 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [skala, microsoft-skala, skala-cuda11x, skala-cuda12x, skala-cuda13x]
+        package: [skala, microsoft-skala, skala-cuda12x, skala-cuda13x]
     environment:
       name: pypi
       url: https://pypi.org/p/${{ matrix.package }}
     permissions:
+      contents: read
       id-token: write  # IMPORTANT: mandatory for trusted publishing
 
     steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        persist-credentials: false
+
+    - name: Print CPU diagnostics
+      uses: ./.github/actions/cpu-diagnostics
+
     - name: Download all the dists
       uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
       with:
         name: ${{ matrix.package }}-pkg
         path: dist/
     - name: Publish distribution to PyPI
-      uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
+      uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1.14
